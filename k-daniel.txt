@@ -1,0 +1,65 @@
+import pandas as pd
+from datetime import timedelta
+from datetime import datetime
+from airflow.decorators import dag, task
+
+path = '/var/lib/airflow/airflow.git/dags/a.batalov/vgsales.csv'
+year = 1994 + hash(f'k-daniel') % 23
+
+default_args = {
+    'owner': 'k.daniel',
+    'depends_on_past': False,
+    'retries': 2,
+    'retry_delay': timedelta(minutes=5),
+    'start_date': datetime(2023, 4, 9),
+    'schedule_interval': '20 30 * * *'
+}
+
+
+@dag(default_args=default_args, catchup = False)
+def k_daniel_lesson_3():
+    @task
+    def get_data():
+        df1 = pd.read_csv(path)
+        df = df1[df1.Year == year]
+        return df
+
+    @task
+    def best_seller(data):
+        return data[data.Global_Sales == data.Global_Sales.max()].Name.values[0]
+    
+    @task
+    def best_eu_sales(data):
+        return data.groupby('Genre').EU_Sales.sum().idxmax()
+    
+    @task
+    def north_america_platform(data):
+        return data[data.NA_Sales > 1].groupby('Platform').Name.count().idxmax()
+    
+    @task
+    def mean_sales_japan(data):
+        return data.groupby('Publisher').JP_Sales.mean().idxmax()
+    
+    @task
+    def sold_eu_better_japan(data):
+        return len(data[data.EU_Sales > data.JP_Sales])
+
+    @task
+    def print_data(best_seller, best_eu_sales, north_america_platform, mean_sales_japan, sold_eu_better_japan):
+
+        print(f'Игра {best_seller} была самой продаваемой в этом году во всем мире.')
+        print(f'Игры жанра {best_eu_sales} были самыми продаваемыми в Европе.')
+        print(f'На платформе {north_america_platform} было больше всего игр, которые продались более чем миллионным тиражом в Северной Америке.')
+        print(f'У издателя {mean_sales_japan} самые высокие средние продажи в Японии')
+        print(f'{sold_eu_better_japan} игр продалось лучше в Европе, чем в Японии.')
+
+    data                   = get_data()
+    best_seller            = best_seller(data)
+    best_eu_sales          = best_eu_sales(data)
+    north_america_platform = north_america_platform(data)
+    mean_sales_japan       = mean_sales_japan(data)
+    sold_eu_better_japan   = sold_eu_better_japan(data)
+    print_data(best_seller, best_eu_sales, north_america_platform, mean_sales_japan, sold_eu_better_japan)
+
+
+k_daniel = k_daniel()
